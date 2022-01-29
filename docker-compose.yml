@@ -1,0 +1,66 @@
+version: '3.8'
+
+# Docker Volumeの設定（Docker内部にデータ永続化先を作る）
+volumes:
+  mysql-volume:
+  phpmyadmin-sessions:
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./infra/docker/php/Dockerfile
+    volumes:
+      - ./src/:/var/www/html
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_NAME}
+      - DB_USERNAME=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+  web:
+    build:
+      # context = `docker build`コマンドを実行した場所のこと
+      # ルートディレクトリをDockerのコンテキスト(docker buildを実行する場所)にすることで、Dockerfileはルートディレクトリ以下にあるどんなファイルにもアクセスできるようになる
+      # 参考記事：https://qiita.com/sam8helloworld/items/e7fffa9afc82aea68a7a
+      context: .
+      dockerfile: ./infra/docker/nginx/Dockerfile
+    ports:
+      - ${WEB_PORT}:80
+    depends_on:
+      - app
+    volumes:
+      - ./src/:/var/www/html
+
+  db:
+    build:
+      context: .
+      dockerfile: ./infra/docker/mysql/Dockerfile
+    ports:
+      - ${DB_PORT}:3306
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      TZ: 'Asia/Tokyo'
+    volumes:
+      # 3行目付近で名付けたDocker内部のVolumeにコンテナ内データの永続化先を設定する
+      - mysql-volume:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    depends_on:
+      - db
+    environment:
+      # - PMA_ARBITRARY=1
+      - PMA_HOSTS=db
+      # 以下の設定で、phpMyAdminにログインする時の認証画面を通すこと無くphpMyAdminにアクセスできるようになる
+      - PMA_USER=useruser
+      - PMA_PASSWORD=passpass
+    ports:
+      - "8080:80"
+    volumes:
+      - phpmyadmin-sessions:/sessions
